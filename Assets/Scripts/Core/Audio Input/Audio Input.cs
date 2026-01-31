@@ -9,6 +9,8 @@ public class AudioInput : MonoBehaviour
     public float vadThreshold = 0.002f;
     public float silenceTime = 0.12f;
 
+    [HideInInspector] public bool micEnabled = true;
+
     const int WINDOW_SIZE = 160; // 10 ms @ 16kHz
     const int PRE_ROLL_WINDOWS = 3; // keep a little before speech
 
@@ -46,6 +48,9 @@ public class AudioInput : MonoBehaviour
 
     void Update()
     {
+        if (!micEnabled)
+            return;
+        
         if (micClip == null)
             return;
 
