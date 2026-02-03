@@ -70,19 +70,35 @@ public class PlayerMovement : MonoBehaviour
             rb.gravityScale = gravityDown / Physics2D.gravity.magnitude;
     }
 
+    private bool jumpRequested;
+    private bool turnRequested;
+    public void RequestJump()
+    {
+        jumpRequested = true;
+    }
+
+    public void RequestTurn()
+    {
+        turnRequested = true;
+    }
+    
     void Update()
     {
         // AUTO RUN
         inputX = facingDir;
 
         // CHANGE DIRECTION BUTTON
-        if (Input.GetKeyDown(KeyCode.F))
+        if (Input.GetKeyDown(KeyCode.F) || turnRequested)
         {
             facingDir *= -1f;
+            turnRequested = false;
         }
 
-        if (Input.GetKeyDown(KeyCode.J))
+        if (Input.GetKeyDown(KeyCode.J) || jumpRequested)
+        {
             bufferTimer = jumpBuffer;
+            jumpRequested = false;
+        }
         else
             bufferTimer -= Time.deltaTime;
     }
@@ -96,6 +112,12 @@ public class PlayerMovement : MonoBehaviour
         HandleJump();
         ApplyGravity();
         ClampFall();
+    }
+
+    private void LateUpdate()
+    {
+        jumpRequested = false;
+        turnRequested = false;
     }
 
     void HandleTimers()

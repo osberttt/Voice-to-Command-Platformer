@@ -4,8 +4,9 @@ using System.IO;
 
 public class VoiceRecognizer : MonoBehaviour
 {
+    public PlayerMovement playerMovement;
     public AudioInput audioInput;
-    public float threshold = 1.2f;
+    public float threshold = 10f;
 
     List<float[][]> jumpTemplates = new();
     List<float[][]> turnTemplates = new();
@@ -64,9 +65,9 @@ public class VoiceRecognizer : MonoBehaviour
         Debug.Log($"DTW jump={jumpDist:F3}, turn={turnDist:F3}");
 
         if (jumpDist < turnDist && jumpDist < threshold)
-            Debug.Log("JUMP");
+            playerMovement.RequestJump();
         else if (turnDist < jumpDist && turnDist < threshold)
-            Debug.Log("TURN");
+            playerMovement.RequestTurn();
         else
             Debug.Log("UNKNOWN");
     }
