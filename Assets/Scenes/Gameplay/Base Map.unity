@@ -549,8 +549,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1676073405}
-  - component: {fileID: 1676073404}
-  - component: {fileID: 1676073403}
+  - component: {fileID: 1676073407}
+  - component: {fileID: 1676073406}
   m_Layer: 0
   m_Name: Audio System
   m_TagString: Untagged
@@ -558,37 +558,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1676073403
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1676073402}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 817109ea4041df6429e518ed7e5c94e6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::VoiceRecognizer
-  playerMovement: {fileID: 6066227807879319333}
-  audioInput: {fileID: 1676073404}
-  threshold: 10
---- !u!114 &1676073404
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1676073402}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1b5010df95fa28046becb3ce3627b555, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::AudioInput
-  sampleRate: 16000
-  vadThreshold: 0.002
-  silenceTime: 0.12
-  micEnabled: 1
 --- !u!4 &1676073405
 Transform:
   m_ObjectHideFlags: 0
@@ -604,6 +573,36 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1676073406
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1676073402}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0cb654a7d03341c4da5b654ffa50377c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VoiceRecognizerLite
+  audio: {fileID: 1676073407}
+  playerMovement: {fileID: 6066227807879319333}
+  frameThreshold: 18
+  cooldown: 0.25
+--- !u!114 &1676073407
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1676073402}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 20537042e05b0ec49a244a159e524a3b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AudioInputRealtime
+  sampleRate: 16000
+  vadThreshold: 0.002
 --- !u!1 &2088608413
 GameObject:
   m_ObjectHideFlags: 0

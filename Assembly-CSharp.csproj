@@ -48,13 +48,20 @@
   <ItemGroup>
     <Compile Include="Assets\Scripts\Core\Audio Input\MFCC.cs" />
     <Compile Include="Assets\Scripts\Core\Audio Input\Voice Template Data.cs" />
+    <Compile Include="Assets\Scripts\Core\Audio Input Lite\VoiceRecognizerLite.cs" />
+    <Compile Include="Assets\Scripts\Core\Audio Input Lite\AudioInputRealTime.cs" />
     <Compile Include="Assets\Scripts\Core\Audio Input\Audio Input.cs" />
+    <Compile Include="Assets\Scripts\Core\Audio Input Lite\LiteMFCC.cs" />
     <Compile Include="Assets\Scripts\Player Movement.cs" />
     <Compile Include="Assets\Scripts\Core\Audio Input\MFCC Sequence.cs" />
+    <Compile Include="Assets\Scripts\Core\Audio Input Lite\VoiceCalibrationLite.cs" />
+    <Compile Include="Assets\Scripts\Core\Audio Input Lite\MFCCFrame.cs" />
+    <Compile Include="Assets\Scripts\Core\Audio Input Lite\VoiceTemplateDataLite.cs" />
     <Compile Include="Assets\Scripts\Core\Audio Input\FFT Utility.cs" />
     <Compile Include="Assets\Scripts\Core\Audio Input\Voice Calibrator.cs" />
     <Compile Include="Assets\Scripts\Core\Audio Input\Mel Filter Bank.cs" />
     <Compile Include="Assets\Scripts\Core\Audio Input\Voice Recognizer.cs" />
+    <Compile Include="Assets\Scripts\Core\Audio Input Lite\VoiceTemplateLite.cs" />
     <Compile Include="Assets\Scripts\Core\Audio Input\DTW.cs" />
     <None Include="Assets\TextMesh Pro\Shaders\TMPro.cginc" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile Overlay.shader" />

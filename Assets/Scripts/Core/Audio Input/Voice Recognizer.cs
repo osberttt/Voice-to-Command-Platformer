@@ -6,22 +6,34 @@ public class VoiceRecognizer : MonoBehaviour
 {
     public PlayerMovement playerMovement;
     public AudioInput audioInput;
-    public float threshold = 10f;
+
+    [Header("Thresholds")]
+    public float earlyThreshold = 6f;
+    public float finalThreshold = 10f;
+    public float confidenceMargin = 1.5f;
 
     List<float[][]> jumpTemplates = new();
     List<float[][]> turnTemplates = new();
 
+    bool actionTriggered;
+
     void Start()
     {
         LoadTemplates();
-        audioInput.OnCommandFinished += Recognize;
+
+        audioInput.OnSpeechProgress += RecognizePartial;
+        audioInput.OnCommandFinished += RecognizeFinal;
     }
 
     void OnDisable()
     {
-        audioInput.OnCommandFinished -= Recognize;
+        audioInput.OnSpeechProgress -= RecognizePartial;
+        audioInput.OnCommandFinished -= RecognizeFinal;
     }
 
+    // =========================
+    // LOAD
+    // =========================
     void LoadTemplates()
     {
         string path = Path.Combine(
@@ -31,58 +43,107 @@ public class VoiceRecognizer : MonoBehaviour
 
         if (!File.Exists(path))
         {
-            Debug.LogError("Voice templates not found!");
+            Debug.LogError("Voice templates not found");
             return;
         }
 
-        string json = File.ReadAllText(path);
-        VoiceTemplateData data = JsonUtility.FromJson<VoiceTemplateData>(json);
+        var data = JsonUtility.FromJson<VoiceTemplateData>(File.ReadAllText(path));
 
         jumpTemplates.Clear();
         turnTemplates.Clear();
 
-        foreach (var seq in data.jump)
-            jumpTemplates.Add(seq.ToMFCC());
+        foreach (var t in data.jump)
+            jumpTemplates.Add(t.ToMFCC());
 
-        foreach (var seq in data.turn)
-            turnTemplates.Add(seq.ToMFCC());
+        foreach (var t in data.turn)
+            turnTemplates.Add(t.ToMFCC());
 
-        Debug.Log(
-            $"Loaded templates — Jump: {jumpTemplates.Count}, Turn: {turnTemplates.Count}"
-        );
+        Debug.Log($"Templates loaded — Jump {jumpTemplates.Count}, Turn {turnTemplates.Count}");
     }
 
-    void Recognize(float[] samples)
+    // =========================
+    // EARLY (PREFIX)
+    // =========================
+    void RecognizePartial(float[] samples)
     {
-        if (jumpTemplates.Count == 0 || turnTemplates.Count == 0)
+        if (actionTriggered)
             return;
 
         float[][] input = MFCC.Extract(samples);
+        if (input.Length < 3)
+            return;
 
-        float jumpDist = Best(input, jumpTemplates);
-        float turnDist = Best(input, turnTemplates);
+        float jumpDist = BestPrefix(input, jumpTemplates);
+        float turnDist = BestPrefix(input, turnTemplates);
 
-        Debug.Log($"DTW jump={jumpDist:F3}, turn={turnDist:F3}");
-
-        if (jumpDist < turnDist && jumpDist < threshold)
-            playerMovement.RequestJump();
-        else if (turnDist < jumpDist && turnDist < threshold)
-            playerMovement.RequestTurn();
-        else
-            Debug.Log("UNKNOWN");
+        if (jumpDist + confidenceMargin < turnDist && jumpDist < earlyThreshold)
+        {
+            TriggerJump(true);
+        }
+        else if (turnDist + confidenceMargin < jumpDist && turnDist < earlyThreshold)
+        {
+            TriggerTurn(true);
+        }
     }
 
-    float Best(float[][] input, List<float[][]> templates)
+    // =========================
+    // FINAL
+    // =========================
+    void RecognizeFinal(float[] samples)
+    {
+        actionTriggered = false;
+
+        float[][] input = MFCC.Extract(samples);
+        if (input.Length == 0)
+            return;
+
+        float jumpDist = BestFull(input, jumpTemplates);
+        float turnDist = BestFull(input, turnTemplates);
+
+        if (jumpDist + confidenceMargin < turnDist && jumpDist < finalThreshold)
+            TriggerJump(false);
+        else if (turnDist + confidenceMargin < jumpDist && turnDist < finalThreshold)
+            TriggerTurn(false);
+    }
+
+    // =========================
+    // HELPERS
+    // =========================
+    float BestPrefix(float[][] input, List<float[][]> templates)
     {
         float best = float.MaxValue;
 
         foreach (var t in templates)
         {
-            float d = DTW.Distance(input, t);
-            if (d < best)
-                best = d;
+            int minPrefix = Mathf.Max(3, input.Length);
+            float d = DTW.PrefixDistance(input, t, minPrefix);
+            best = Mathf.Min(best, d);
         }
 
         return best;
+    }
+
+    float BestFull(float[][] input, List<float[][]> templates)
+    {
+        float best = float.MaxValue;
+
+        foreach (var t in templates)
+            best = Mathf.Min(best, DTW.Distance(input, t));
+
+        return best;
+    }
+
+    void TriggerJump(bool early)
+    {
+        actionTriggered = true;
+        playerMovement.RequestJump();
+        Debug.Log(early ? "EARLY JUMP" : "FINAL JUMP");
+    }
+
+    void TriggerTurn(bool early)
+    {
+        actionTriggered = true;
+        playerMovement.RequestTurn();
+        Debug.Log(early ? "EARLY TURN" : "FINAL TURN");
     }
 }

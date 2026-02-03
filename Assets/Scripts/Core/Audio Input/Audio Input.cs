@@ -12,33 +12,31 @@ public class AudioInput : MonoBehaviour
     [HideInInspector] public bool micEnabled = true;
 
     const int WINDOW_SIZE = 160; // 10 ms @ 16kHz
-    const int PRE_ROLL_WINDOWS = 3; // keep a little before speech
+    const int PRE_ROLL_WINDOWS = 3;
 
     AudioClip micClip;
     int lastSamplePos;
 
     int silenceSamples;
     int silenceSampleLimit;
-
     bool isSpeaking;
 
     List<float> currentSamples = new();
     Queue<float[]> preRoll = new();
-
     List<float> window = new();
 
+    public Action<float[]> OnSpeechProgress;
     public Action<float[]> OnCommandFinished;
 
     void Start()
     {
         silenceSampleLimit = Mathf.RoundToInt(silenceTime * sampleRate);
-        StartCoroutine(StartCo());
+        StartCoroutine(StartMic());
     }
 
-    IEnumerator StartCo()
+    IEnumerator StartMic()
     {
         micClip = Microphone.Start(null, true, 1, sampleRate);
-
         while (Microphone.GetPosition(null) <= 0)
             yield return null;
 
@@ -48,10 +46,7 @@ public class AudioInput : MonoBehaviour
 
     void Update()
     {
-        if (!micEnabled)
-            return;
-        
-        if (micClip == null)
+        if (!micEnabled || !micClip)
             return;
 
         int pos = Microphone.GetPosition(null);
@@ -88,7 +83,6 @@ public class AudioInput : MonoBehaviour
 
         rms = Mathf.Sqrt(rms / samples.Count);
 
-        // Keep pre-roll
         preRoll.Enqueue(samples.ToArray());
         if (preRoll.Count > PRE_ROLL_WINDOWS)
             preRoll.Dequeue();
@@ -100,14 +94,13 @@ public class AudioInput : MonoBehaviour
                 isSpeaking = true;
                 silenceSamples = 0;
 
-                // prepend pre-roll
                 foreach (var w in preRoll)
                     currentSamples.AddRange(w);
-
-                Debug.Log("Speech started");
             }
 
             currentSamples.AddRange(samples);
+
+            OnSpeechProgress?.Invoke(currentSamples.ToArray());
         }
         else if (isSpeaking)
         {
@@ -115,7 +108,6 @@ public class AudioInput : MonoBehaviour
 
             if (silenceSamples < silenceSampleLimit)
             {
-                // keep short silence inside word
                 currentSamples.AddRange(samples);
             }
             else
@@ -131,16 +123,12 @@ public class AudioInput : MonoBehaviour
         silenceSamples = 0;
         preRoll.Clear();
 
-        // Amplitude sanity check
         float max = 0f;
         foreach (float s in currentSamples)
             max = Mathf.Max(max, Mathf.Abs(s));
 
         if (currentSamples.Count > sampleRate * 0.08f && max > 0.01f)
-        {
-            Debug.Log($"Command finished | samples={currentSamples.Count}");
             OnCommandFinished?.Invoke(currentSamples.ToArray());
-        }
 
         currentSamples.Clear();
     }

@@ -116,8 +116,8 @@ public class PlayerMovement : MonoBehaviour
 
     private void LateUpdate()
     {
-        jumpRequested = false;
-        turnRequested = false;
+        //jumpRequested = false;
+        //turnRequested = false;
     }
 
     void HandleTimers()
