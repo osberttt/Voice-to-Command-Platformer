@@ -844,7 +844,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8813a4dfd77a91e40a1727f192f7b73e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VoiceCalibrationLite
-  audio: {fileID: 1271412876}
+  audioInput: {fileID: 1271412876}
   statusText: {fileID: 245975109}
 --- !u!114 &1271412876
 MonoBehaviour:

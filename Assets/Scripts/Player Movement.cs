@@ -4,30 +4,39 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody2D))]
 public class PlayerMovement : MonoBehaviour
 {
-    [Header("Walk")] public float topSpeed = 8f;
+    [Header("Input")]
+    public InputProviderSO inputProvider;
+
+    [Header("Walk")] 
+    public float topSpeed = 8f;
     public float accelerationTime = 0.2f;
     public float decelerationTime = 0.15f;
 
-    [Header("Air Control")] [Range(0f, 1f)]
+    [Header("Air Control")] 
+    [Range(0f, 1f)]
     public float airControlMultiplier = 0.5f;
 
-    [Header("Jump")] public float jumpMaxHeight = 4f;
+    [Header("Jump")] 
+    public float jumpMaxHeight = 4f;
     public float timeToApex = 0.4f;
     public float hangTime = 0.02f;
     public float timeToFall = 0.3f;
-
     public int airJumps = 1;
 
-    [Header("Fall")] public float maxFallSpeed = 20f;
+    [Header("Fall")] 
+    public float maxFallSpeed = 20f;
 
-    [Header("Player Forgiveness")] public float coyoteTime = 0.1f;
+    [Header("Player Forgiveness")] 
+    public float coyoteTime = 0.1f;
     public float jumpBuffer = 0.1f;
 
-    [Header("Checks")] public Transform groundCheck;
+    [Header("Checks")] 
+    public Transform groundCheck;
     public Vector2 groundCheckSize = new Vector2(0.6f, 0.1f);
     public LayerMask groundLayer;
 
-    [Header("Facing")] public bool flipOnInput = true;
+    [Header("Facing")] 
+    public bool flipOnInput = true;
 
     Rigidbody2D rb;
 
@@ -56,6 +65,22 @@ public class PlayerMovement : MonoBehaviour
         RecalculateParameters();
     }
 
+    void OnEnable()
+    {
+        if (inputProvider != null)
+        {
+            inputProvider.Initialize();
+        }
+    }
+
+    void OnDisable()
+    {
+        if (inputProvider != null)
+        {
+            inputProvider.Cleanup();
+        }
+    }
+
     public void RecalculateParameters()
     {
         accel = topSpeed / accelerationTime;
@@ -70,37 +95,40 @@ public class PlayerMovement : MonoBehaviour
             rb.gravityScale = gravityDown / Physics2D.gravity.magnitude;
     }
 
-    private bool jumpRequested;
-    private bool turnRequested;
-    public void RequestJump()
-    {
-        jumpRequested = true;
-    }
-
-    public void RequestTurn()
-    {
-        turnRequested = true;
-    }
-    
     void Update()
     {
+        if (inputProvider == null)
+        {
+            Debug.LogWarning("No input provider assigned!");
+            return;
+        }
+
+        // Update keyboard input if it's a KeyboardInputSO
+        if (inputProvider is KeyboardInputSO keyboardInput)
+        {
+            keyboardInput.Update();
+        }
+
         // AUTO RUN
         inputX = facingDir;
 
-        // CHANGE DIRECTION BUTTON
-        if (Input.GetKeyDown(KeyCode.F) || turnRequested)
+        // CHANGE DIRECTION
+        if (inputProvider.TurnRequested)
         {
             facingDir *= -1f;
-            turnRequested = false;
+            inputProvider.ConsumeTurn();
         }
 
-        if (Input.GetKeyDown(KeyCode.J) || jumpRequested)
+        // JUMP INPUT
+        if (inputProvider.JumpRequested)
         {
             bufferTimer = jumpBuffer;
-            jumpRequested = false;
+            inputProvider.ConsumeJump();
         }
         else
+        {
             bufferTimer -= Time.deltaTime;
+        }
     }
 
     void FixedUpdate()
@@ -112,12 +140,6 @@ public class PlayerMovement : MonoBehaviour
         HandleJump();
         ApplyGravity();
         ClampFall();
-    }
-
-    private void LateUpdate()
-    {
-        //jumpRequested = false;
-        //turnRequested = false;
     }
 
     void HandleTimers()
@@ -239,8 +261,24 @@ public class PlayerMovement : MonoBehaviour
     {
         if (groundCheck != null)
         {
-            Gizmos.color = isGrounded? Color.green: Color.red;
+            Gizmos.color = isGrounded ? Color.green : Color.red;
             Gizmos.DrawWireCube(groundCheck.position, groundCheckSize);
+        }
+    }
+
+    // Optional: Runtime input switching
+    public void SetInputProvider(InputProviderSO newProvider)
+    {
+        if (inputProvider != null)
+        {
+            inputProvider.Cleanup();
+        }
+
+        inputProvider = newProvider;
+
+        if (inputProvider != null)
+        {
+            inputProvider.Initialize();
         }
     }
 }
