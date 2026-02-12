@@ -22,6 +22,11 @@ public class VoiceInputSO : InputProviderSO
     [Range(0f, 1f)]
     public float deltaWeight = 0.3f;
 
+    [Header("Competitive Matching")]
+    [Tooltip("Winner's distance must be < loser's distance * marginFactor")]
+    [Range(0.5f, 0.95f)]
+    public float marginFactor = 0.8f;
+
     [Header("Debugging")]
     public bool enableDebugLogs = true;
     public bool trackMetrics = true;
@@ -68,6 +73,7 @@ public class VoiceInputSO : InputProviderSO
         recognizer.minFramesRequired = minFramesRequired;
         recognizer.useDeltaFeatures = useDeltaFeatures;
         recognizer.deltaWeight = deltaWeight;
+        recognizer.marginFactor = marginFactor;
         recognizer.enableDebugLogs = enableDebugLogs;
         recognizer.trackMetrics = trackMetrics;
 
@@ -173,6 +179,13 @@ public class VoiceInputSO : InputProviderSO
         deltaWeight = Mathf.Clamp01(weight);
         if (recognizer != null)
             recognizer.deltaWeight = deltaWeight;
+    }
+
+    public void SetMarginFactor(float margin)
+    {
+        marginFactor = Mathf.Clamp(margin, 0.5f, 0.95f);
+        if (recognizer != null)
+            recognizer.marginFactor = marginFactor;
     }
 
     // Get debug stats

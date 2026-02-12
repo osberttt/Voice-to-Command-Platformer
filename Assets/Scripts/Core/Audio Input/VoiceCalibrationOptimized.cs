@@ -130,6 +130,16 @@ public class VoiceCalibrationOptimized : MonoBehaviour
 
     public void Save()
     {
+        // Auto-calibrate threshold if both templates are complete
+        if (data.jump.IsComplete && data.turn.IsComplete)
+        {
+            float interDist = CentroidDistance(data.jump.centroid, data.turn.centroid);
+            data.autoThreshold = interDist * 0.5f;
+            data.jump.autoThreshold = data.autoThreshold;
+            data.turn.autoThreshold = data.autoThreshold;
+            Debug.Log($"Auto-threshold: {data.autoThreshold:F3} (inter-template distance: {interDist:F3})");
+        }
+
         string path = Path.Combine(
             Application.persistentDataPath,
             "voice_templates_optimized.json"
@@ -137,9 +147,20 @@ public class VoiceCalibrationOptimized : MonoBehaviour
 
         string json = JsonUtility.ToJson(data, true);
         File.WriteAllText(path, json);
-        statusText.text = "Saved 💾";
-        
+        statusText.text = $"Saved (threshold: {data.autoThreshold:F2})";
+
         Debug.Log($"Saved to: {path}");
+    }
+
+    float CentroidDistance(float[] a, float[] b)
+    {
+        float sum = 0f;
+        for (int i = 0; i < Mathf.Min(a.Length, b.Length); i++)
+        {
+            float d = a[i] - b[i];
+            sum += d * d;
+        }
+        return Mathf.Sqrt(sum);
     }
 }
 
@@ -148,4 +169,5 @@ public class VoiceTemplateDataOptimized
 {
     public VoiceTemplateOptimized jump = new VoiceTemplateOptimized();
     public VoiceTemplateOptimized turn = new VoiceTemplateOptimized();
+    public float autoThreshold = 2.0f;
 }

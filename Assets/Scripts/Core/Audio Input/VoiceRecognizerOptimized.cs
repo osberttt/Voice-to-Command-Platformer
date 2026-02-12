@@ -5,7 +5,7 @@ using UnityEngine;
 using UnityEngine.Events;
 
 /// <summary>
-/// Highly optimized recognizer with 200ms latency
+/// Voice recognizer with L2-normalized centroid matching and competitive discrimination
 /// </summary>
 public class VoiceRecognizerOptimized : MonoBehaviour
 {
@@ -18,13 +18,16 @@ public class VoiceRecognizerOptimized : MonoBehaviour
     public event EventHandler<VoiceEventArgs> OnTurnMetrics;
 
     [Header("Recognition Settings")]
-    public float frameThreshold = 12f; // Lowered for faster triggering
-    public float cooldown = 0.15f; // Reduced cooldown
+    public float frameThreshold = 12f; // Overridden by auto-threshold from templates
+    public float cooldown = 0.15f;
 
     [Header("Optimization")]
-    public int minFramesRequired = 2; // Reduced from 3
+    public int minFramesRequired = 2;
     public bool useDeltaFeatures = true;
     public float deltaWeight = 0.3f;
+
+    [Header("Competitive Matching")]
+    public float marginFactor = 0.8f; // Winner's dist must be < loser's dist * this
 
     [Header("Debug")]
     public bool enableDebugLogs = true;
@@ -96,9 +99,17 @@ public class VoiceRecognizerOptimized : MonoBehaviour
         jump = data.jump;
         turn = data.turn;
 
+        // Use auto-calibrated threshold if available
+        if (data.autoThreshold > 0f)
+        {
+            frameThreshold = data.autoThreshold;
+            if (enableDebugLogs)
+                Debug.Log($"Using auto-threshold: {frameThreshold:F3}");
+        }
+
         if (enableDebugLogs)
         {
-            Debug.Log($"Loaded: jump={jump.windows.Count}, turn={turn.windows.Count}");
+            Debug.Log($"Loaded: jump={jump.windows.Count} frames, turn={turn.windows.Count} frames, threshold={frameThreshold:F3}");
         }
     }
 
@@ -109,57 +120,78 @@ public class VoiceRecognizerOptimized : MonoBehaviour
         if (locked && Time.time < unlockTime)
             return;
 
-        // Compute delta features
+        // L2-normalize incoming MFCC for volume invariance
+        float[] normMFCC = VoiceTemplateOptimized.NormalizeMFCC(mfcc);
+
+        // Compute delta features from normalized vectors
         float[] delta = null;
         if (useDeltaFeatures && hasPrevious)
         {
             delta = new float[MFCC_DIM];
             for (int i = 0; i < MFCC_DIM; i++)
-                delta[i] = mfcc[i] - prevMFCC[i];
+                delta[i] = normMFCC[i] - prevMFCC[i];
         }
 
-        CheckCommand(jump, ref jumpMatchCount, ref jumpStartTime, mfcc, delta, "JUMP", OnJumpFired);
-        CheckCommand(turn, ref turnMatchCount, ref turnStartTime, mfcc, delta, "TURN", OnTurnFired);
+        // Compute distances to BOTH templates (centroid-based)
+        float jumpDist = ComputeTemplateDistance(jump, normMFCC, delta);
+        float turnDist = ComputeTemplateDistance(turn, normMFCC, delta);
 
-        // Store for next delta
-        Array.Copy(mfcc, prevMFCC, MFCC_DIM);
+        // Competitive matching: only the closer template gets credit
+        bool jumpCloser = jumpDist <= turnDist;
+
+        if (jumpCloser)
+        {
+            bool hasMargin = jumpDist < turnDist * marginFactor;
+            ProcessMatch(jump, jumpDist, hasMargin, ref jumpMatchCount, ref jumpStartTime, "JUMP", OnJumpFired);
+            if (turnMatchCount > 0) turnMatchCount = 0;
+        }
+        else
+        {
+            bool hasMargin = turnDist < jumpDist * marginFactor;
+            ProcessMatch(turn, turnDist, hasMargin, ref turnMatchCount, ref turnStartTime, "TURN", OnTurnFired);
+            if (jumpMatchCount > 0) jumpMatchCount = 0;
+        }
+
+        // Store normalized frame for next delta
+        Array.Copy(normMFCC, prevMFCC, MFCC_DIM);
         hasPrevious = true;
     }
 
-    void CheckCommand(
-        VoiceTemplateOptimized template,
-        ref int matchCount,
-        ref float startTime,
-        float[] mfcc,
-        float[] delta,
-        string commandName,
-        Action<VoiceRecognitionMetrics> callback
-    )
+    float ComputeTemplateDistance(VoiceTemplateOptimized template, float[] normMFCC, float[] delta)
     {
         if (template == null || !template.IsComplete)
-            return;
+            return float.MaxValue;
 
-        int frameIdx = Mathf.Min(matchCount, template.windows.Count - 1);
-        float[] templateMFCC = template.windows[frameIdx].ToArray();
+        // Distance to centroid (robust single-vector representation)
+        float dist = FrameDistance(normMFCC, template.centroid);
 
-        // Compute distance with optional delta features
-        float dist = FrameDistance(mfcc, templateMFCC);
-        
         if (useDeltaFeatures && delta != null && template.deltaCoefficients != null)
         {
             float deltaDist = DeltaDistance(delta, template.deltaCoefficients);
             dist = dist * (1f - deltaWeight) + deltaDist * deltaWeight;
         }
 
-        bool isMatch = dist < frameThreshold;
+        return dist;
+    }
+
+    void ProcessMatch(
+        VoiceTemplateOptimized template,
+        float dist,
+        bool hasMargin,
+        ref int matchCount,
+        ref float matchStartTime,
+        string commandName,
+        Action<VoiceRecognitionMetrics> callback)
+    {
+        bool isMatch = dist < frameThreshold && hasMargin;
 
         if (isMatch)
         {
             if (matchCount == 0)
             {
-                startTime = Time.time;
+                matchStartTime = Time.time;
                 if (enableDebugLogs)
-                    Debug.Log($"⚡ {commandName} START at {Time.time:F3}s");
+                    Debug.Log($"{commandName} START at {Time.time:F3}s (dist={dist:F3})");
             }
 
             matchCount++;
@@ -168,7 +200,7 @@ public class VoiceRecognizerOptimized : MonoBehaviour
             {
                 VoiceRecognitionMetrics metrics = new VoiceRecognitionMetrics
                 {
-                    speakStartTime = startTime,
+                    speakStartTime = matchStartTime,
                     speakEndTime = Time.time,
                     invokeTime = Time.time,
                     command = commandName,
@@ -178,7 +210,7 @@ public class VoiceRecognizerOptimized : MonoBehaviour
                 };
 
                 metrics.totalLatency = metrics.invokeTime - metrics.speakStartTime;
-                metrics.processingLatency = 0f; // Negligible
+                metrics.processingLatency = 0f;
                 metrics.frameLatency = matchCount;
 
                 Fire(callback, metrics);
@@ -188,7 +220,7 @@ public class VoiceRecognizerOptimized : MonoBehaviour
         else
         {
             if (matchCount > 0)
-                matchCount = 0; // Reset immediately
+                matchCount = 0;
         }
     }
 
@@ -227,7 +259,7 @@ public class VoiceRecognizerOptimized : MonoBehaviour
 
             if (enableDebugLogs)
             {
-                Debug.Log($"🔥 {metrics.command} FIRED! Latency: {metrics.totalLatency * 1000f:F1}ms");
+                Debug.Log($"FIRED {metrics.command}! Latency: {metrics.totalLatency * 1000f:F1}ms");
             }
         }
 

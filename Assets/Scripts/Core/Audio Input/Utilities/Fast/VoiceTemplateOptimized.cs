@@ -2,38 +2,44 @@ using UnityEngine;
 using System.Collections.Generic;
 
 /// <summary>
-/// Optimized voice template with better feature selection
+/// Optimized voice template with centroid matching and L2 normalization
 /// </summary>
 [System.Serializable]
 public class VoiceTemplateOptimized
 {
     public List<MFCCFrame> windows = new List<MFCCFrame>();
-    
-    // Additional features for better discrimination
+
     public float[] energyProfile = new float[3];
-    public float[] deltaCoefficients = new float[6]; // First derivatives
-    
-    public bool IsComplete => windows.Count >= 2; // Reduced from 3 for speed
+    public float[] deltaCoefficients = new float[6];
+    public float[] centroid = new float[6];
+    public float autoThreshold = 2.0f;
+
+    public bool IsComplete => windows.Count >= 2;
 
     public void BuildFromRecording(List<float[]> frames)
     {
         if (frames.Count < 5) return;
 
-        // Strategy 1: Find onset (rapid energy increase)
         int onsetIndex = FindOnset(frames);
-        
-        // Strategy 2: Select most discriminative frames
         List<int> selectedIndices = SelectDiscriminativeFrames(frames, onsetIndex);
-        
+
+        // Compute centroid from ALL voiced frames (robust average)
+        centroid = new float[6];
+        for (int i = 0; i < frames.Count; i++)
+            for (int j = 0; j < 6; j++)
+                centroid[j] += frames[i][j];
+        for (int j = 0; j < 6; j++)
+            centroid[j] /= frames.Count;
+        centroid = NormalizeMFCC(centroid);
+
+        // Store normalized selected frames
         windows.Clear();
         foreach (int idx in selectedIndices)
-        {
-            windows.Add(new MFCCFrame(frames[idx]));
-        }
+            windows.Add(new MFCCFrame(NormalizeMFCC(frames[idx])));
 
-        // Compute delta coefficients for better matching
+        // Compute deltas from normalized frames
         ComputeDeltas(frames, selectedIndices);
-        
+
         // Store energy profile
         for (int i = 0; i < selectedIndices.Count && i < 3; i++)
         {
@@ -50,7 +56,7 @@ public class VoiceTemplateOptimized
         // Find maximum energy increase (onset detection)
         int onset = 0;
         float maxDelta = 0f;
-        
+
         for (int i = 1; i < energies.Length; i++)
         {
             float delta = energies[i] - energies[i - 1];
@@ -66,16 +72,14 @@ public class VoiceTemplateOptimized
 
     List<int> SelectDiscriminativeFrames(List<float[]> frames, int onset)
     {
-        // Select frames with highest variation (most discriminative)
+        // Select frames around onset: onset-1 through onset+3 (up to 5 frames)
         List<int> indices = new List<int>();
-        
-        // Always include onset
-        indices.Add(onset);
-        
-        // Add frame right after onset (captures rising edge)
-        if (onset + 1 < frames.Count)
-            indices.Add(onset + 1);
-        
+        for (int offset = -1; offset <= 3; offset++)
+        {
+            int idx = onset + offset;
+            if (idx >= 0 && idx < frames.Count)
+                indices.Add(idx);
+        }
         return indices;
     }
 
@@ -83,11 +87,11 @@ public class VoiceTemplateOptimized
     {
         if (indices.Count < 2) return;
 
+        // Use normalized frames for consistent delta domain
+        float[] norm0 = NormalizeMFCC(frames[indices[0]]);
+        float[] norm1 = NormalizeMFCC(frames[indices[1]]);
         for (int i = 0; i < 6; i++)
-        {
-            float delta = frames[indices[1]][i] - frames[indices[0]][i];
-            deltaCoefficients[i] = delta;
-        }
+            deltaCoefficients[i] = norm1[i] - norm0[i];
     }
 
     float ComputeEnergy(float[] mfcc)
@@ -96,5 +100,20 @@ public class VoiceTemplateOptimized
         for (int i = 0; i < mfcc.Length; i++)
             sum += Mathf.Abs(mfcc[i]);
         return sum;
+    }
+
+    public static float[] NormalizeMFCC(float[] mfcc)
+    {
+        float mag = 0f;
+        for (int i = 0; i < mfcc.Length; i++)
+            mag += mfcc[i] * mfcc[i];
+        mag = Mathf.Sqrt(mag);
+
+        if (mag < 1e-8f) return (float[])mfcc.Clone();
+
+        float[] norm = new float[mfcc.Length];
+        for (int i = 0; i < mfcc.Length; i++)
+            norm[i] = mfcc[i] / mag;
+        return norm;
     }
 }
