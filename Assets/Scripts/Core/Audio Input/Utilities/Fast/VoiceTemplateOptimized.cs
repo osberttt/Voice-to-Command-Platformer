@@ -10,8 +10,8 @@ public class VoiceTemplateOptimized
     public List<MFCCFrame> windows = new List<MFCCFrame>();
 
     public float[] energyProfile = new float[3];
-    public float[] deltaCoefficients = new float[6];
-    public float[] centroid = new float[6];
+    public float[] deltaCoefficients = new float[5];
+    public float[] centroid = new float[5]; // c1-c5 only (skip c0 log energy)
     public float autoThreshold = 2.0f;
 
     public bool IsComplete => windows.Count >= 2;
@@ -23,12 +23,12 @@ public class VoiceTemplateOptimized
         int onsetIndex = FindOnset(frames);
         List<int> selectedIndices = SelectDiscriminativeFrames(frames, onsetIndex);
 
-        // Compute centroid from ALL voiced frames (robust average)
-        centroid = new float[6];
+        // Compute spectral centroid from c1-c5 (skip c0 = log energy, varies with volume not phonetics)
+        centroid = new float[5];
         for (int i = 0; i < frames.Count; i++)
-            for (int j = 0; j < 6; j++)
-                centroid[j] += frames[i][j];
-        for (int j = 0; j < 6; j++)
+            for (int j = 0; j < 5; j++)
+                centroid[j] += frames[i][j + 1];
+        for (int j = 0; j < 5; j++)
             centroid[j] /= frames.Count;
         centroid = NormalizeMFCC(centroid);
 
@@ -87,11 +87,11 @@ public class VoiceTemplateOptimized
     {
         if (indices.Count < 2) return;
 
-        // Use normalized frames for consistent delta domain
-        float[] norm0 = NormalizeMFCC(frames[indices[0]]);
-        float[] norm1 = NormalizeMFCC(frames[indices[1]]);
-        for (int i = 0; i < 6; i++)
-            deltaCoefficients[i] = norm1[i] - norm0[i];
+        // Use spectral features (c1-c5) for consistent delta domain
+        float[] spec0 = SpectralFeatures(frames[indices[0]]);
+        float[] spec1 = SpectralFeatures(frames[indices[1]]);
+        for (int i = 0; i < 5; i++)
+            deltaCoefficients[i] = spec1[i] - spec0[i];
     }
 
     float ComputeEnergy(float[] mfcc)
@@ -100,6 +100,85 @@ public class VoiceTemplateOptimized
         for (int i = 0; i < mfcc.Length; i++)
             sum += Mathf.Abs(mfcc[i]);
         return sum;
+    }
+
+    /// <summary>
+    /// Merge multiple recording templates into one robust template.
+    /// Averages centroids and deltas; keeps onset frames from highest-energy recording.
+    /// </summary>
+    public static VoiceTemplateOptimized MergeTemplates(List<VoiceTemplateOptimized> templates)
+    {
+        if (templates == null || templates.Count == 0) return null;
+        if (templates.Count == 1) return templates[0];
+
+        var merged = new VoiceTemplateOptimized();
+
+        // Average spectral centroids (c1-c5) across recordings, then re-normalize
+        merged.centroid = new float[5];
+        for (int t = 0; t < templates.Count; t++)
+            for (int j = 0; j < 5; j++)
+                merged.centroid[j] += templates[t].centroid[j];
+        for (int j = 0; j < 5; j++)
+            merged.centroid[j] /= templates.Count;
+        merged.centroid = NormalizeMFCC(merged.centroid);
+
+        // Average delta coefficients (c1-c5)
+        merged.deltaCoefficients = new float[5];
+        for (int t = 0; t < templates.Count; t++)
+            for (int j = 0; j < 5; j++)
+                merged.deltaCoefficients[j] += templates[t].deltaCoefficients[j];
+        for (int j = 0; j < 5; j++)
+            merged.deltaCoefficients[j] /= templates.Count;
+
+        // Keep onset frames from the recording with highest total energy
+        int bestIdx = 0;
+        float bestEnergy = 0f;
+        for (int t = 0; t < templates.Count; t++)
+        {
+            float e = 0f;
+            for (int i = 0; i < templates[t].energyProfile.Length; i++)
+                e += templates[t].energyProfile[i];
+            if (e > bestEnergy) { bestEnergy = e; bestIdx = t; }
+        }
+        merged.windows = new List<MFCCFrame>(templates[bestIdx].windows);
+        merged.energyProfile = (float[])templates[bestIdx].energyProfile.Clone();
+
+        return merged;
+    }
+
+    /// <summary>
+    /// Compute average distance from each recording's centroid to the merged centroid.
+    /// Used for within-class variance estimation.
+    /// </summary>
+    public static float ComputeSpread(List<VoiceTemplateOptimized> templates, float[] mergedCentroid)
+    {
+        if (templates == null || templates.Count <= 1) return 0f;
+
+        float totalDist = 0f;
+        for (int t = 0; t < templates.Count; t++)
+        {
+            float sum = 0f;
+            int dim = Mathf.Min(templates[t].centroid.Length, mergedCentroid.Length);
+            for (int j = 0; j < dim; j++)
+            {
+                float d = templates[t].centroid[j] - mergedCentroid[j];
+                sum += d * d;
+            }
+            totalDist += Mathf.Sqrt(sum);
+        }
+        return totalDist / templates.Count;
+    }
+
+    /// <summary>
+    /// Extract spectral shape features: c1-c5 from raw MFCC, L2-normalized.
+    /// Skips c0 (log energy) which varies with volume, not phonetics.
+    /// </summary>
+    public static float[] SpectralFeatures(float[] mfcc)
+    {
+        float[] spec = new float[5];
+        for (int i = 0; i < 5; i++)
+            spec[i] = mfcc[i + 1];
+        return NormalizeMFCC(spec);
     }
 
     public static float[] NormalizeMFCC(float[] mfcc)

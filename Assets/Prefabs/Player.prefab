@@ -314,7 +314,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 75bca6c4cbf4daa4da52d671f3c96c2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
-  topSpeed: 9
+  inputProvider: {fileID: 11400000, guid: 6d66ab463f6289e4f8e99ca4076978e6, type: 2}
+  topSpeed: 6
   accelerationTime: 0.15
   decelerationTime: 0.1
   airControlMultiplier: 1

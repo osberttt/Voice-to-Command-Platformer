@@ -30,3 +30,7 @@
 
 # OS
 Thumbs.db
+
+# Claude 
+.claude/
+TECHNICAL_INDEX.md

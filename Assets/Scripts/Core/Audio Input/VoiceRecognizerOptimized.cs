@@ -51,8 +51,8 @@ public class VoiceRecognizerOptimized : MonoBehaviour
     private int frameCounter;
     private float startTime;
 
-    // Delta computation
-    private float[] prevMFCC = new float[MFCC_DIM];
+    // Delta computation (spectral: c1-c5 only)
+    private float[] prevSpectral = new float[5];
     private bool hasPrevious;
 
     void Awake()
@@ -120,21 +120,21 @@ public class VoiceRecognizerOptimized : MonoBehaviour
         if (locked && Time.time < unlockTime)
             return;
 
-        // L2-normalize incoming MFCC for volume invariance
-        float[] normMFCC = VoiceTemplateOptimized.NormalizeMFCC(mfcc);
+        // Extract spectral features (c1-c5, skip c0 log energy) for matching
+        float[] spectral = VoiceTemplateOptimized.SpectralFeatures(mfcc);
 
-        // Compute delta features from normalized vectors
+        // Compute delta features from spectral vectors
         float[] delta = null;
         if (useDeltaFeatures && hasPrevious)
         {
-            delta = new float[MFCC_DIM];
-            for (int i = 0; i < MFCC_DIM; i++)
-                delta[i] = normMFCC[i] - prevMFCC[i];
+            delta = new float[5];
+            for (int i = 0; i < 5; i++)
+                delta[i] = spectral[i] - prevSpectral[i];
         }
 
         // Compute distances to BOTH templates (centroid-based)
-        float jumpDist = ComputeTemplateDistance(jump, normMFCC, delta);
-        float turnDist = ComputeTemplateDistance(turn, normMFCC, delta);
+        float jumpDist = ComputeTemplateDistance(jump, spectral, delta);
+        float turnDist = ComputeTemplateDistance(turn, spectral, delta);
 
         // Competitive matching: only the closer template gets credit
         bool jumpCloser = jumpDist <= turnDist;
@@ -152,8 +152,8 @@ public class VoiceRecognizerOptimized : MonoBehaviour
             if (jumpMatchCount > 0) jumpMatchCount = 0;
         }
 
-        // Store normalized frame for next delta
-        Array.Copy(normMFCC, prevMFCC, MFCC_DIM);
+        // Store spectral features for next delta
+        Array.Copy(spectral, prevSpectral, 5);
         hasPrevious = true;
     }
 
@@ -227,7 +227,8 @@ public class VoiceRecognizerOptimized : MonoBehaviour
     float FrameDistance(float[] a, float[] b)
     {
         float sum = 0f;
-        for (int i = 0; i < MFCC_DIM; i++)
+        int dim = Mathf.Min(a.Length, b.Length);
+        for (int i = 0; i < dim; i++)
         {
             float d = a[i] - b[i];
             sum += d * d;
@@ -238,7 +239,8 @@ public class VoiceRecognizerOptimized : MonoBehaviour
     float DeltaDistance(float[] delta, float[] templateDelta)
     {
         float sum = 0f;
-        for (int i = 0; i < MFCC_DIM; i++)
+        int dim = Mathf.Min(delta.Length, templateDelta.Length);
+        for (int i = 0; i < dim; i++)
         {
             float d = delta[i] - templateDelta[i];
             sum += d * d;

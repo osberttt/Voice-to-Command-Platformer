@@ -16,9 +16,10 @@ MonoBehaviour:
   cooldown: 0.25
   sampleRate: 16000
   vadThreshold: 0.002
-  minFramesRequired: 3
+  minFramesRequired: 1
   useDeltaFeatures: 1
   deltaWeight: 0.3
+  marginFactor: 0.8
   enableDebugLogs: 1
   trackMetrics: 1
   showVisualFeedback: 1
